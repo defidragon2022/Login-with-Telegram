@@ -1,17 +1,20 @@
 /**
- * telegram.js — Telegram WebApp & Login Widget utilities
+ * telegram.js — Telegram utilities
  *
- * Two authentication scenarios:
+ * TWO separate authentication systems:
  *
- * 1. Telegram Mini App (opened inside Telegram bot)
- *    - window.Telegram.WebApp is available
- *    - initDataUnsafe.user contains the current user
- *    - initData (raw string) must be verified server-side with HMAC-SHA256
+ * ── NEW: Telegram Login (OIDC) ─────────────────────────────────────────────
+ *   Docs: https://core.telegram.org/bots/telegram-login
+ *   Script: https://oauth.telegram.org/js/telegram-login.js?3
+ *   - Uses your numeric Client ID (from @BotFather → Bot Settings → Web Login)
+ *   - Returns a signed JWT id_token (OpenID Connect)
+ *   - Server verifies token against JWKS: https://oauth.telegram.org/.well-known/jwks.json
+ *   - Supports scopes: openid, profile, phone, telegram:bot_access
  *
- * 2. Telegram Login Widget (external website)
- *    - A <script> tag renders a "Log in with Telegram" button
- *    - After login, a callback receives user object + hash
- *    - Hash must be verified server-side with HMAC-SHA256
+ * ── Telegram Mini App (WebApp) ─────────────────────────────────────────────
+ *   - window.Telegram.WebApp available when opened inside a Telegram bot
+ *   - initDataUnsafe.user contains the current user automatically
+ *   - initData raw string must be verified server-side with HMAC-SHA256
  */
 
 export const TelegramWebApp = {
@@ -100,27 +103,62 @@ export const TelegramWebApp = {
 }
 
 /**
- * Loads the Telegram Login Widget script into a container element.
+ * Loads the NEW Telegram Login SDK (telegram-login.js?3) into <head>.
  *
- * @param {HTMLElement} container   – DOM element to inject the widget into
- * @param {string}      botUsername – Your bot's username (without @)
- * @param {string}      callbackFn  – Global function name called after login
+ * Call once at app startup. The library exposes window.Telegram.Login
+ * once loaded. Use triggerTelegramLogin() after that.
  *
- * Usage:
- *   window.onTelegramAuth = (user) => { ... }
- *   loadLoginWidget(el, 'MyBot', 'onTelegramAuth')
+ * Setup required in @BotFather:
+ *   1. Open @BotFather mini app → Bot Settings → Web Login
+ *   2. Add your website origin as an Allowed URL
+ *   3. Copy the numeric Client ID shown there
+ *
+ * @param {number} clientId - Numeric Client ID from @BotFather
  */
-export function loadLoginWidget(container, botUsername, callbackFn = 'onTelegramAuth') {
-  if (!container || !botUsername) return
+export function loadTelegramLoginSDK(clientId) {
+  if (!clientId) return
+  if (document.querySelector('script[data-tg-login-sdk]')) return // already loaded
 
   const script = document.createElement('script')
   script.async = true
-  script.src = 'https://telegram.org/js/telegram-widget.js?22'
-  script.setAttribute('data-telegram-login', botUsername)
-  script.setAttribute('data-size', 'large')
-  script.setAttribute('data-radius', '12')
-  script.setAttribute('data-onauth', `${callbackFn}(user)`)
-  script.setAttribute('data-request-access', 'write')
+  script.src = 'https://oauth.telegram.org/js/telegram-login.js?3'
+  script.setAttribute('data-tg-login-sdk', '1')
+  script.setAttribute('data-client-id', String(clientId))
+  document.head.appendChild(script)
+}
 
-  container.appendChild(script)
+/**
+ * Open the Telegram Login popup using the JS API.
+ *
+ * The callback receives ONE of:
+ *   { id_token: string, user: TelegramUser }   — success
+ *   { error: string }                           — failure / cancelled
+ *
+ * TelegramUser (decoded from id_token):
+ *   { id, name, preferred_username, picture, sub, iss, aud, iat, exp,
+ *     phone_number? }
+ *
+ * IMPORTANT: Verify id_token server-side before trusting user data.
+ *   Fetch JWKS from https://oauth.telegram.org/.well-known/jwks.json
+ *   and verify with a standard JWT library.
+ *
+ * @param {number}   clientId - Numeric Client ID from @BotFather
+ * @param {Function} onResult - Callback receiving { id_token, user } | { error }
+ * @param {Object}   [opts]   - Optional: { request_access, lang, nonce }
+ */
+export function triggerTelegramLogin(clientId, onResult, opts = {}) {
+  if (!window.Telegram?.Login) {
+    onResult({ error: 'Telegram Login SDK is not loaded yet. Please wait a moment and try again.' })
+    return
+  }
+
+  window.Telegram.Login.auth(
+    {
+      client_id: clientId,
+      request_access: opts.request_access ?? ['write'],
+      lang: opts.lang,
+      nonce: opts.nonce,
+    },
+    onResult,
+  )
 }

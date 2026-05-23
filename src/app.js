@@ -15,6 +15,7 @@ export class App {
     this.router  = new Router()
     this._user   = null
     this._initData = null
+    this._idToken  = null
   }
 
   /** Boot the application. */
@@ -33,7 +34,7 @@ export class App {
       if (user) {
         // Running inside Telegram — skip login entirely
         console.log('[App] Telegram Mini App detected. Auto-login.')
-        this._login(user, TelegramWebApp.getInitData())
+        this._login({ user, initData: TelegramWebApp.getInitData() })
         return
       }
     }
@@ -50,25 +51,32 @@ export class App {
       .register('profile', (data) => this._showProfile(data))
   }
 
-  _login(user, initData = null) {
-    this._user     = user
+  /**
+   * @param {{ user, id_token?, initData?, is_demo? }} data
+   */
+  _login({ user, id_token = null, initData = null, is_demo = false }) {
+    this._user    = user
+    this._idToken = id_token
     this._initData = initData
-    this.router.navigate('profile', { user, initData })
+    this.router.navigate('profile', { user, id_token, initData, is_demo })
   }
 
   _showLogin() {
     renderLoginPage(this.root, {
-      onDemoLogin:   (user)         => this._login(user, null),
-      onWidgetLogin: (user)         => this._login(user, null),
+      onDemoLogin:      (data) => this._login(data),
+      onTelegramLogin:  (data) => this._login(data),
     })
   }
 
-  _showProfile({ user, initData }) {
+  _showProfile({ user, id_token, initData, is_demo }) {
     renderProfilePage(this.root, {
       user,
+      id_token,
       initData,
+      is_demo,
       onLogout: () => {
-        this._user     = null
+        this._user    = null
+        this._idToken = null
         this._initData = null
         TelegramWebApp.haptic('light')
         this.router.navigate('login')
