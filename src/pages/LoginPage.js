@@ -95,7 +95,7 @@ function setupHint() {
       <ol class="text-[11px] text-amber-600 space-y-1 list-decimal list-inside leading-relaxed">
         <li>Create a bot: <strong>@BotFather</strong> → <code class="bg-amber-100 px-1 rounded">/newbot</code></li>
         <li>Open <strong>@BotFather</strong> mini app → <strong>Bot Settings → Web Login</strong></li>
-        <li>Add <code class="bg-amber-100 px-1 rounded">http://localhost:3000</code> as an Allowed URL</li>
+        <li>Add your site origin as a <strong>Trusted Origin</strong> (e.g. <code class="bg-amber-100 px-1 rounded">https://login-with-telegram.onrender.com</code>)</li>
         <li>Paste the <strong>numeric Client ID</strong> into <code class="bg-amber-100 px-1 rounded">CLIENT_ID</code> in <strong>LoginPage.js</strong></li>
       </ol>
     </div>
